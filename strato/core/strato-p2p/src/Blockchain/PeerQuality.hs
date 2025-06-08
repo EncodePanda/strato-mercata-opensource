@@ -9,6 +9,7 @@ module Blockchain.PeerQuality (
  , classifyMessage
 
    -- * Utility Functions
+ , updateMessageStats
  , emptyPeerQuality
  , emptyMessageStats
 ) where
@@ -89,6 +90,34 @@ classifyMessage GetMPNodes{} = PrivateChainRequest
 classifyMessage MPNodes{} = Responses
 classifyMessage NewBlockHashes{} = Responses
 classifyMessage NewBlock{} = BlockResponse
+
+-- | Update message statistics with new data point
+--
+--   The update is being calculated with a smoothing factor - exponentially
+--   moving average for response time (more weight to recently added data
+--   points).
+--
+--   This Matters for Peer Quality because:
+--
+--   - Network conditions change - a peer might get better/worse connectivity
+--   - Recent performance is more predictive of future performance
+--   - Gradual adaptation - not too sensitive to single outliers, but responsive to trends
+updateMessageStats ::  Double -> Bool -> UTCTime -> MessageStats -> MessageStats
+updateMessageStats responseTime success timestamp oldStats =
+  let newCount = msCount oldStats + 1
+      newFailures
+        | success = msFailures oldStats
+        | otherwise = msFailures oldStats + 1
+      alpha = 0.1
+      newAvgResponseTime
+        | msCount oldStats == 0 = responseTime
+        | otherwise = (msAvgResponseTime oldStats * (1 - alpha)) + (responseTime * alpha)
+  in MessageStats
+      { msCount = newCount
+      , msFailures = newFailures
+      , msAvgResponseTime = newAvgResponseTime
+      , msLastSeen = timestamp
+      }
 
 -- | Create an empty PeerQuality instance for a new peer with a neutral starting
 -- score 0.5
