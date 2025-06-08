@@ -3,6 +3,7 @@ module Blockchain.PeerQuality (
   -- * Data Types
   PeerQuality (..),
   MessageType (..),
+  MessageStats (..),
 
   -- * Message Classification
   classifyMessage,
@@ -15,6 +16,7 @@ import Crypto.Types.PubKey.ECC (Point)
 import Data.Time (UTCTime)
 import GHC.Generics (Generic)
 import Blockchain.Data.Wire (Message (..))
+import qualified Data.Map.Strict as Map
 
 -- | Complete quality assessment for a peer.
 data PeerQuality = PeerQuality
@@ -24,6 +26,8 @@ data PeerQuality = PeerQuality
   -- ^ When connection was established
   , pqLastActivity :: !UTCTime
   -- ^ Last message activity
+  , pqMessageStats :: !(Map.Map MessageType MessageStats)
+  -- ^ Per-message-type statistics
   , pqOverallScore :: !Double
   -- ^ Periodically calculated quality score (0.0-1.0)
   } deriving (Show, Eq, Generic)
@@ -49,6 +53,20 @@ data MessageType
   | ConsensusMsg
   -- ^ All Blockstanbul consensus messages
   deriving (Show, Eq, Ord, Generic)
+
+
+-- | Statistics for a specific message type. We track each MessageStats per
+-- MessageType
+data MessageStats = MessageStats
+  { msCount           :: !Int
+  -- ^ Total number of messages of this type
+  , msFailures        :: !Int
+  -- ^ Number of failed requests/responses
+  , msAvgResponseTime :: !Double
+  -- ^ Average response time in milliseconds
+  , msLastSeen        :: !UTCTime
+  -- ^ Timestamp of last message of this type
+  } deriving (Show, Eq, Generic)
 
 -- | Classify a message into a performance category
 classifyMessage :: Message -> MessageType
@@ -78,5 +96,6 @@ emptyPeerQuality peerId now = PeerQuality
   { pqPeerId = peerId
   , pqConnectedAt = now
   , pqLastActivity = now
+  , pqMessageStats = Map.empty
   , pqOverallScore = 0.5
   }
