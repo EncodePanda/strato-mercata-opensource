@@ -10,6 +10,7 @@ module Blockchain.PeerQuality (
 
    -- * Utility Functions
  , emptyPeerQuality
+ , emptyMessageStats
 ) where
 
 import Crypto.Types.PubKey.ECC (Point)
@@ -98,4 +99,13 @@ emptyPeerQuality peerId now = PeerQuality
   , pqLastActivity = now
   , pqMessageStats = Map.empty
   , pqOverallScore = 0.5
+  }
+
+-- | Create an empty MessageStats
+emptyMessageStats :: UTCTime -> MessageStats
+emptyMessageStats now = MessageStats
+  { msCount = 0
+  , msFailures = 0
+  , msAvgResponseTime = 0.0
+  , msLastSeen = now
   }
