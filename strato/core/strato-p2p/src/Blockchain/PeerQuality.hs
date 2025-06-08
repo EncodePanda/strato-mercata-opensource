@@ -102,6 +102,8 @@ classifyMessage NewBlock{} = BlockResponse
 --   - Network conditions change - a peer might get better/worse connectivity
 --   - Recent performance is more predictive of future performance
 --   - Gradual adaptation - not too sensitive to single outliers, but responsive to trends
+--
+-- TODO consider making alpha parameter configurable for the node operator
 updateMessageStats ::  Double -> Bool -> UTCTime -> MessageStats -> MessageStats
 updateMessageStats responseTime success timestamp oldStats =
   let newCount = msCount oldStats + 1
