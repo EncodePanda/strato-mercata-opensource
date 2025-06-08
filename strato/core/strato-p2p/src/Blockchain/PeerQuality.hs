@@ -79,29 +79,61 @@ newtype ReliabilityWeight = ReliabilityWeight Double
 
 newtype LatencyWeight = LatencyWeight Double
 
+-- | Response time thresholds for evaluating peer performance.
+--
+-- This data type defines three performance tiers for measuring how quickly
+-- peers respond to different types of messages. The thresholds are used by
+-- the scoring algorithm to evaluate peer quality.
+--
+-- Performance tiers:
+-- * @_ideal@: Response times at or below this threshold receive perfect scores (1.0)
+-- * @_reasonable@: Response times between ideal and reasonable receive good scores (0.5-1.0)
+-- * @_fatal@: Response times between reasonable and fatal receive poor scores (0.0-0.5)
+-- * Above @_fatal@: Response times above this threshold receive zero scores (0.0)
+--
+-- All values are in milliseconds.
+data ExpectedResponseTime = ExpectedResponseTime
+  { _ideal :: !Double
+  -- ^ Average responses smaller or equal to this value are considered ideal
+  , _reasonable :: !Double
+  -- ^ Average responses between 'ideal' and this value are considered reasonable
+  , _fatal :: !Double
+  -- ^ Average responses between 'reasonable' and this value are considered
+  -- problematic, averages bigger than this value are considred fatal
+  }
+
 -- | Calculate performance score for a specific message type
 --
 -- The score is a floating-point value between 0.0 (worst) and 1.0 (best)
 -- that reflects how well a peer performs for a given message type
 messageTypeScore :: MessageType -> MessageStats -> Double
 messageTypeScore msgType MessageStats{..} =
-  let (minExpected, maxExpected) = expectedResponseTime msgType
-
-      reliability
+  let reliability
         | msCount == 0 = 0.5
         | otherwise    = 1.0 - (fromIntegral msFailures / fromIntegral msCount)
 
-      speedScore
-        | msAvgResponseTime <= minExpected = 1.0
-        | msAvgResponseTime >= maxExpected = 0.0
-        | otherwise =
-            1.0 - ((msAvgResponseTime - minExpected) / (maxExpected - minExpected))
+      latency = speedScore (expectedResponseTime msgType) msAvgResponseTime
 
       (ReliabilityWeight rWeight, LatencyWeight lWeight) = messageTypeWeights msgType
 
-      combinedScore = (reliability * rWeight) + (speedScore * lWeight)
+      combinedScore = (reliability * rWeight) + (latency * lWeight)
 
   in max 0.0 $ min 1.0 $ combinedScore
+
+
+-- | Calculates latency-based speed score based on response time ranges.
+-- Response times below 'ideal' are perfect (1.0).
+-- Between 'ideal' and 'reasonable' decay linearly to ~0.6–0.7.
+-- Between 'reasonable' and 'fatal' decay further to 0.0.
+-- Above 'fatal', score is 0.0 (unacceptable latency).
+speedScore :: ExpectedResponseTime -> Double -> Double
+speedScore (ExpectedResponseTime ideal reasonable fatal) responseTime
+  | responseTime <= ideal = 1.0
+  | responseTime <= reasonable =
+      1.0 - ((responseTime - ideal) / (reasonable - ideal)) * 0.5
+  | responseTime <= fatal =
+      0.5 - ((responseTime - reasonable) / (fatal - reasonable)) * 0.5
+  | otherwise = 0.0
 
 -- | Classify a message into a performance category
 classifyMessage :: Message -> MessageType
@@ -146,15 +178,15 @@ messageTypeWeights ConsensusMsg = (ReliabilityWeight 0.9, LatencyWeight 0.1)
 
 -- | Expected response time ranges for different message types (min, max in
 -- milliseconds)
-expectedResponseTime :: MessageType -> (Double, Double)
-expectedResponseTime P2PWireProtocol = (10,100)
-expectedResponseTime Responses = (50, 500)
-expectedResponseTime HeaderRequest = (100, 500)
-expectedResponseTime BlockRequest = (100, 500)
-expectedResponseTime PrivateChainRequest = (100, 500)
-expectedResponseTime TransactionRequest = (100, 500)
-expectedResponseTime BlockResponse = (200, 30000)
-expectedResponseTime ConsensusMsg = (100, 1000)
+expectedResponseTime :: MessageType -> ExpectedResponseTime
+expectedResponseTime P2PWireProtocol = ExpectedResponseTime 10 100 200
+expectedResponseTime Responses = ExpectedResponseTime  50 500 800
+expectedResponseTime HeaderRequest = ExpectedResponseTime 100 500 800
+expectedResponseTime BlockRequest = ExpectedResponseTime 100 500 1000
+expectedResponseTime PrivateChainRequest = ExpectedResponseTime 100 500 800
+expectedResponseTime TransactionRequest = ExpectedResponseTime 100 500 100
+expectedResponseTime BlockResponse = ExpectedResponseTime 200 30000 50000
+expectedResponseTime ConsensusMsg = ExpectedResponseTime 100 1000 2000
 
 -- | Update message statistics with new data point
 --
