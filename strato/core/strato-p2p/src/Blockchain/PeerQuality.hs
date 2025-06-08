@@ -1,15 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Blockchain.PeerQuality (
-  -- * Data Types
-  PeerQuality (..),
-  MessageType (..),
-  MessageStats (..),
+   -- * Data Types
+   PeerQuality (..)
+ , MessageType (..)
+ , MessageStats (..)
 
-  -- * Message Classification
-  classifyMessage,
+   -- * Message Classification
+ , classifyMessage
 
-  -- * Utility Functions
-  emptyPeerQuality,
+   -- * Utility Functions
+ , emptyPeerQuality
 ) where
 
 import Crypto.Types.PubKey.ECC (Point)
