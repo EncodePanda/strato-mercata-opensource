@@ -1,12 +1,17 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards #-}
 module Blockchain.PeerQuality (
    -- * Data Types
    PeerQuality (..)
  , MessageType (..)
  , MessageStats (..)
 
+   -- * Scoring Functions
+ , messageTypeScore
+
    -- * Message Classification
  , classifyMessage
+ , expectedResponseTime
 
    -- * Utility Functions
  , updateMessageStats
@@ -70,6 +75,28 @@ data MessageStats = MessageStats
   -- ^ Timestamp of last message of this type
   } deriving (Show, Eq, Generic)
 
+-- | Calculate performance score for a specific message type
+--
+-- The score is a floating-point value between 0.0 (worst) and 1.0 (best)
+-- that reflects how well a peer performs for a given message type
+messageTypeScore :: MessageType -> MessageStats -> Double
+messageTypeScore msgType MessageStats{..} =
+  let (minExpected, maxExpected) = expectedResponseTime msgType
+
+      reliability
+        | msCount == 0 = 0.5
+        | otherwise    = 1.0 - (fromIntegral msFailures / fromIntegral msCount)
+
+      speedScore
+        | msAvgResponseTime <= minExpected = 1.0
+        | msAvgResponseTime >= maxExpected = 0.0
+        | otherwise =
+            1.0 - ((msAvgResponseTime - minExpected) / (maxExpected - minExpected))
+
+      combinedScore = (reliability * 0.6) + (speedScore * 0.4)
+
+  in max 0.0 $ min 1.0 $ combinedScore
+
 -- | Classify a message into a performance category
 classifyMessage :: Message -> MessageType
 classifyMessage Hello{} = P2PWireProtocol
@@ -90,6 +117,18 @@ classifyMessage GetMPNodes{} = PrivateChainRequest
 classifyMessage MPNodes{} = Responses
 classifyMessage NewBlockHashes{} = Responses
 classifyMessage NewBlock{} = BlockResponse
+
+-- | Expected response time ranges for different message types (min, max in
+-- milliseconds)
+expectedResponseTime :: MessageType -> (Double, Double)
+expectedResponseTime P2PWireProtocol = (10,100)
+expectedResponseTime Responses = (50, 500)
+expectedResponseTime HeaderRequest = (100, 500)
+expectedResponseTime BlockRequest = (100, 500)
+expectedResponseTime PrivateChainRequest = (100, 500)
+expectedResponseTime TransactionRequest = (100, 500)
+expectedResponseTime BlockResponse = (200, 30000)
+expectedResponseTime ConsensusMsg = (100, 1000)
 
 -- | Update message statistics with new data point
 --
