@@ -228,6 +228,9 @@ messageTypeWeights ConsensusMsg = (ReliabilityWeight 0.9, LatencyWeight 0.1)
 
 -- | Expected response time ranges for different message types (min, max in
 -- milliseconds)
+--
+-- TODO Consider making those values configurable for the node operator
+-- TODO Consider evantually replacing fixed heuristics with real-time analytics
 expectedResponseTime :: MessageType -> ExpectedResponseTime
 expectedResponseTime P2PWireProtocol = ExpectedResponseTime 10 100 200
 expectedResponseTime Responses = ExpectedResponseTime  50 500 800
