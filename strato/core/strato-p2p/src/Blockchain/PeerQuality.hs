@@ -75,6 +75,10 @@ data MessageStats = MessageStats
   -- ^ Timestamp of last message of this type
   } deriving (Show, Eq, Generic)
 
+newtype ReliabilityWeight = ReliabilityWeight Double
+
+newtype LatencyWeight = LatencyWeight Double
+
 -- | Calculate performance score for a specific message type
 --
 -- The score is a floating-point value between 0.0 (worst) and 1.0 (best)
@@ -93,7 +97,9 @@ messageTypeScore msgType MessageStats{..} =
         | otherwise =
             1.0 - ((msAvgResponseTime - minExpected) / (maxExpected - minExpected))
 
-      combinedScore = (reliability * 0.6) + (speedScore * 0.4)
+      (ReliabilityWeight rWeight, LatencyWeight lWeight) = messageTypeWeights msgType
+
+      combinedScore = (reliability * rWeight) + (speedScore * lWeight)
 
   in max 0.0 $ min 1.0 $ combinedScore
 
@@ -117,6 +123,26 @@ classifyMessage GetMPNodes{} = PrivateChainRequest
 classifyMessage MPNodes{} = Responses
 classifyMessage NewBlockHashes{} = Responses
 classifyMessage NewBlock{} = BlockResponse
+
+-- | Assigns a reliability and latency weight to each message type
+-- for the purpose of calculating peer performance scores.
+--
+-- The weights determine how important successful delivery (reliability)
+-- and response speed (latency) are for each message category.
+-- They are used by the scoring function to compute weighted quality
+-- metrics for peers in the network.
+--
+-- TODO consider moving this to configuration for the convenience of the node
+-- operator
+messageTypeWeights :: MessageType -> (ReliabilityWeight, LatencyWeight)
+messageTypeWeights P2PWireProtocol = (ReliabilityWeight 0.2, LatencyWeight 0.8)
+messageTypeWeights Responses = (ReliabilityWeight 0.7, LatencyWeight 0.3)
+messageTypeWeights HeaderRequest = (ReliabilityWeight 0.6, LatencyWeight 0.4)
+messageTypeWeights BlockRequest = (ReliabilityWeight 0.7, LatencyWeight 0.3)
+messageTypeWeights PrivateChainRequest = (ReliabilityWeight 0.8, LatencyWeight 0.2)
+messageTypeWeights TransactionRequest = (ReliabilityWeight 0.5, LatencyWeight 0.5)
+messageTypeWeights BlockResponse = (ReliabilityWeight 0.6, LatencyWeight 0.4)
+messageTypeWeights ConsensusMsg = (ReliabilityWeight 0.9, LatencyWeight 0.1)
 
 -- | Expected response time ranges for different message types (min, max in
 -- milliseconds)
