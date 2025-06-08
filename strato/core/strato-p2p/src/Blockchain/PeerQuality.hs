@@ -7,6 +7,7 @@ module Blockchain.PeerQuality (
  , MessageStats (..)
 
    -- * Scoring Functions
+ , calculatePeerScore
  , messageTypeScore
 
    -- * Message Classification
@@ -101,6 +102,55 @@ data ExpectedResponseTime = ExpectedResponseTime
   -- ^ Average responses between 'reasonable' and this value are considered
   -- problematic, averages bigger than this value are considred fatal
   }
+
+-- | Computes the overall quality score for a connected peer.
+--
+-- The score is a floating-point value between 0.0 (worst) and 1.0 (best)
+-- that reflects how well a peer performs across different message types
+--
+-- Each message type is scored individually using historical statistics gathered
+-- from that peer.  The overall score is a weighted average of these individual
+-- scores, where each message type has a configurable importance (weight).
+--
+-- If the peer has no message stats yet (e.g., just connected), or if no
+-- matching weights are available for the observed message types, the function
+-- returns a neutral default score of 0.5.
+--
+-- The returned score is always normalized between 0.0 and 1.0.
+calculatePeerScore :: PeerQuality -> Double
+calculatePeerScore PeerQuality{..}
+  | Map.null pqMessageStats = 0.5
+  | totalWeight == 0        = 0.5
+  | otherwise               = weightedSum / totalWeight
+  where
+    -- Sum of the weights actually used (i.e. ones that match msgScores)
+    totalWeight :: Double
+    totalWeight = sum $ Map.intersection messageWeights msgScores
+
+    -- Map of message types to their individual scores (0.0 to 1.0)
+    msgScores :: Map.Map MessageType Double
+    msgScores = Map.mapWithKey messageTypeScore pqMessageStats
+
+    -- Sum of all weighted scores
+    weightedSum :: Double
+    weightedSum = sum applicableWeights
+
+    -- Scores multiplied by weights for message types that exist in both maps
+    applicableWeights :: Map.Map MessageType Double
+    applicableWeights = Map.intersectionWith (*) msgScores messageWeights
+
+-- | Importance weight for each message type in overall peer scoring
+messageWeights :: Map.Map MessageType Double
+messageWeights = Map.fromList
+  [ (P2PWireProtocol, 0.1)
+  , (Responses, 0.3)
+  , (HeaderRequest, 0.3)
+  , (BlockRequest, 0.3)
+  , (PrivateChainRequest, 0.3)
+  , (TransactionRequest, 0.3)
+  , (BlockResponse, 0.3)
+  , (ConsensusMsg, 0.3)
+  ]
 
 -- | Calculate performance score for a specific message type
 --
