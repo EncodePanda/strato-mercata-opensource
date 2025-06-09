@@ -17,7 +17,7 @@ spec = describe "Blockchain.PeerQuality" $ do
   describe "calculatePeerScore" $ do
     it "always returns a score between 0.0 and 1.0" $ property $
       -- given
-      forAll arbitrary $ \peerQuality ->
+      \peerQuality ->
         -- when
         let score = calculatePeerScore peerQuality
         -- then
@@ -25,7 +25,7 @@ spec = describe "Blockchain.PeerQuality" $ do
 
     it "returns 0.5 for peers with no message statistics" $ property $
       -- given
-      forAll arbitrary $ \peerQuality ->
+      \peerQuality ->
         let peerQualityNoStats = peerQuality { pqMessageStats = Map.empty }
         -- when
             score = calculatePeerScore peerQualityNoStats
