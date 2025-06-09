@@ -88,6 +88,20 @@ library:
     - unliftio 
     - warp
 
+tests:
+  peer-quality-test:
+    source-dirs: new-test
+    ghc-options: -Wall -dynamic -Wno-orphans
+    main: PeerQualityMain.hs
+    dependencies:
+      - base
+      - containers
+      - hspec
+      - QuickCheck
+      - strato-p2p
+      - time
+      - crypto-pubkey-types
+
 #removing p2p tests for now, it is more work to keep updating this than the reward it is giving
 #tests:
 #  strato-p2p-client-test:
@@ -139,4 +153,3 @@ library:
 #      - vm-runner
 #      - vm-tools
 #      - x509-certs
-
