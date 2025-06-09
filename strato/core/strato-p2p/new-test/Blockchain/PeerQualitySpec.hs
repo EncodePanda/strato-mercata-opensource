@@ -31,6 +31,16 @@ spec = describe "Blockchain.PeerQuality" $ do
             score = calculatePeerScore peerQualityNoStats
         in score == 0.5
 
+  describe "messageTypeScore" $ do
+
+    it "always returns a score between 0.0 and 1.0" $ property $
+      -- given
+      \msgType msgStats ->
+        -- when
+        let score = messageTypeScore msgType msgStats
+        -- then
+        in score >= 0.0 && score <= 1.0
+
 --------------------------------------------------------------------------------
 
 -- | Create a simple dummy Point for testing
